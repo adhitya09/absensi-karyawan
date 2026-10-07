@@ -21,25 +21,34 @@ class ScanComponent extends Component
     public string $successMsg = '';
     public bool $isAbsence = false;
 
-    public function scan(string $barcode)
+    public function scan(string $barcode, $lat = null, $lng = null)
     {
+        if (!is_null($lat) && !is_null($lng) && is_numeric($lat) && is_numeric($lng)) {
+            $this->currentLiveCoords = [(float) $lat, (float) $lng];
+        }
+
         if (is_null($this->currentLiveCoords)) {
-            return __('Invalid location');
+            return __('Lokasi GPS tidak terbaca atau belum terdeteksi. Silakan aktifkan GPS dan izinkan akses lokasi di browser HP Anda.');
         } else if (is_null($this->shift_id)) {
-            return __('Invalid shift');
+            $this->shift_id = Shift::first()?->id;
+            if (is_null($this->shift_id)) {
+                return __('Jadwal shift belum tersedia.');
+            }
         }
 
         /** @var Barcode */
         $barcode = Barcode::firstWhere('value', $barcode);
         if (!Auth::check() || !$barcode) {
-            return 'Invalid barcode';
+            return 'QR Code tidak terdaftar dalam sistem.';
         }
 
-        $barcodeLocation = new LatLong($barcode->latLng['lat'], $barcode->latLng['lng']);
-        $userLocation = new LatLong($this->currentLiveCoords[0], $this->currentLiveCoords[1]);
-
-        if ($barcode->radius > 0 && ($distance = $this->calculateDistance($userLocation, $barcodeLocation)) > $barcode->radius) {
-            return __('Location out of range') . ": $distance" . "m. Max: $barcode->radius" . "m";
+        if ($barcode->radius > 0 && !is_null($barcode->latLng)) {
+            $barcodeLocation = new LatLong($barcode->latLng['lat'], $barcode->latLng['lng']);
+            $userLocation = new LatLong($this->currentLiveCoords[0], $this->currentLiveCoords[1]);
+            $distance = $this->calculateDistance($userLocation, $barcodeLocation);
+            if ($distance > $barcode->radius) {
+                return "Lokasi Anda di luar jangkauan ({$distance}m). Batas maksimal: {$barcode->radius}m";
+            }
         }
 
         /** @var Attendance */

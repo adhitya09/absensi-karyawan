@@ -38,8 +38,9 @@
             <div class="mt-4 flex gap-3">
               <div class="w-full">
                 <x-label for="radius">Radius Valid Absen</x-label>
-                <x-input name="radius" id="radius" class="mt-1 block w-full" type="number" :value="old('radius')"
+                <x-input name="radius" id="radius" class="mt-1 block w-full" type="number" :value="old('radius') ?? 50"
                   placeholder="50 (meter)" />
+                <p class="text-[11px] text-slate-400 mt-1">Masukkan jarak maksimal (meter). Isi <b>0</b> untuk bebas radius (bisa absen dari mana saja).</p>
                 @error('radius')
                   <x-input-error for="radius" class="mt-2" message="{{ $message }}" />
                 @enderror
@@ -49,7 +50,10 @@
             </div>
 
             <div class="mt-5">
-              <h3 class="text-lg font-semibold dark:text-gray-400">{{ __('Coordinate') }}</h3>
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="text-lg font-semibold text-slate-800 dark:text-gray-200">{{ __('Coordinate') }}</h3>
+                <span class="text-xs text-slate-400">Geser pin di peta atau masukkan koordinat</span>
+              </div>
 
               <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div class="w-full">
@@ -63,20 +67,25 @@
                 <div class="w-full">
                   <x-label for="lng">Longitude</x-label>
                   <x-input name="lng" id="lng" class="mt-1 block w-full" type="text" :value="old('lng')"
-                    placeholder="cth: 6.12345" />
+                    placeholder="cth: 106.81234" />
                   @error('lng')
                     <x-input-error for="lng" class="mt-2" message="{{ $message }}" />
                   @enderror
                 </div>
               </div>
 
-              <div class="flex flex-col items-start gap-3 md:flex-row">
-                <x-button type="button" onclick="toggleMap()" class="text-nowrap mt-4">
-                  <x-heroicon-s-map-pin class="mr-2 h-5 w-5" /> Tampilkan/Sembunyikan Peta
+              <div class="flex flex-wrap items-center gap-2.5 mt-4">
+                <x-secondary-button type="button" id="btn-get-gps" onclick="getCurrentGpsLocation()" class="text-nowrap">
+                  <x-heroicon-s-map-pin class="mr-1.5 h-4 w-4 text-emerald-500" />
+                  <span id="btn-gps-text">Ambil Lokasi Saya Sekarang (GPS)</span>
+                </x-secondary-button>
+                <x-button type="button" onclick="toggleMap()" class="text-nowrap">
+                  <x-heroicon-s-map class="mr-1.5 h-4 w-4" />
+                  <span>Tampilkan/Sembunyikan Peta</span>
                 </x-button>
-
-                <div id="map" class="my-6 h-72 w-full md:h-96"></div>
               </div>
+
+              <div id="map" class="my-4 h-72 w-full md:h-96 rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 shadow-inner"></div>
 
               <div class="mt-6 flex items-center justify-end">
                 <x-button class="w-full sm:w-auto justify-center">
@@ -91,25 +100,136 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script>
-      window.addEventListener("load", function() {
-        window.initializeMap({
-          onUpdate: (lat, lng) => {
-            document.getElementById('lat').value = lat;
-            document.getElementById('lng').value = lng;
-          },
-          location: @if (old('lat') && old('lng'))
-            [Number({{ old('lat') }}), Number({{ old('lng') }})]
-          @else
-            undefined
-          @endif
-        });
-      });
+      let barcodeMap = null;
+      let barcodeMarker = null;
 
-      let map = document.getElementById('map');
+      function setupBarcodeMap(initialLat, initialLng) {
+        const latInput = document.getElementById('lat');
+        const lngInput = document.getElementById('lng');
+        const mapContainer = document.getElementById('map');
+        if (!mapContainer) return;
+
+        let lat = parseFloat(initialLat);
+        let lng = parseFloat(initialLng);
+        if (isNaN(lat) || isNaN(lng)) {
+          lat = -6.200000;
+          lng = 106.816666;
+        }
+
+        if (barcodeMap) {
+          barcodeMap.remove();
+        }
+
+        barcodeMap = L.map('map').setView([lat, lng], 15);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap'
+        }).addTo(barcodeMap);
+
+        barcodeMarker = L.marker([lat, lng], { draggable: true }).addTo(barcodeMap);
+
+        // Marker drag updates input
+        barcodeMarker.on('dragend', function() {
+          const pos = barcodeMarker.getLatLng();
+          latInput.value = pos.lat.toFixed(6);
+          lngInput.value = pos.lng.toFixed(6);
+        });
+
+        // Click on map moves marker & updates input
+        barcodeMap.on('click', function(e) {
+          barcodeMarker.setLatLng(e.latlng);
+          latInput.value = e.latlng.lat.toFixed(6);
+          lngInput.value = e.latlng.lng.toFixed(6);
+        });
+
+        // Smart input handler: automatically parses comma-separated coords (e.g. from Google Maps paste)
+        function handleInput(e) {
+          const val = e.target.value.trim();
+          if (val.includes(',') || (val.includes(' ') && val.split(/\s+/).length === 2)) {
+            const parts = val.split(/[,\s]+/).map(p => parseFloat(p.trim())).filter(p => !isNaN(p));
+            if (parts.length >= 2) {
+              latInput.value = parts[0].toFixed(6);
+              lngInput.value = parts[1].toFixed(6);
+            }
+          }
+          syncMapFromInput();
+        }
+
+        // Input change immediately moves map & marker!
+        function syncMapFromInput() {
+          const newLat = parseFloat(latInput.value);
+          const newLng = parseFloat(lngInput.value);
+          if (!isNaN(newLat) && !isNaN(newLng)) {
+            if (barcodeMarker) barcodeMarker.setLatLng([newLat, newLng]);
+            if (barcodeMap) barcodeMap.setView([newLat, newLng], barcodeMap.getZoom() || 15);
+          }
+        }
+
+        latInput.addEventListener('input', handleInput);
+        lngInput.addEventListener('input', handleInput);
+        latInput.addEventListener('change', syncMapFromInput);
+        lngInput.addEventListener('change', syncMapFromInput);
+
+        // Initial populate if empty
+        if (!latInput.value || !lngInput.value) {
+          latInput.value = lat.toFixed(6);
+          lngInput.value = lng.toFixed(6);
+        }
+
+        setTimeout(() => {
+          if (barcodeMap) barcodeMap.invalidateSize();
+        }, 300);
+      }
+
+      function getCurrentGpsLocation() {
+        if (!navigator.geolocation) {
+          alert("Browser Anda tidak mendukung geolokasi GPS");
+          return;
+        }
+        const btnText = document.getElementById('btn-gps-text');
+        if (btnText) btnText.innerText = "Mengambil koordinat GPS...";
+
+        navigator.geolocation.getCurrentPosition(
+          function(pos) {
+            const lat = pos.coords.latitude;
+            const lng = pos.coords.longitude;
+            document.getElementById('lat').value = lat.toFixed(6);
+            document.getElementById('lng').value = lng.toFixed(6);
+
+            if (barcodeMap && barcodeMarker) {
+              barcodeMarker.setLatLng([lat, lng]);
+              barcodeMap.setView([lat, lng], 16);
+              barcodeMap.invalidateSize();
+            } else {
+              setupBarcodeMap(lat, lng);
+            }
+            if (btnText) btnText.innerText = "Ambil Lokasi Saya Sekarang (GPS)";
+          },
+          function(err) {
+            if (btnText) btnText.innerText = "Ambil Lokasi Saya Sekarang (GPS)";
+            alert("Gagal membaca GPS: " + err.message + ". Pastikan izin lokasi aktif di browser.");
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+      }
+      }
 
       function toggleMap() {
-        map.style.display = map.style.display === "none" ? "block" : "none";
+        const mapEl = document.getElementById('map');
+        const isHidden = mapEl.style.display === "none";
+        mapEl.style.display = isHidden ? "block" : "none";
+        if (isHidden && barcodeMap) {
+          setTimeout(() => {
+            barcodeMap.invalidateSize();
+          }, 150);
+        }
       }
+
+      window.addEventListener("load", function() {
+        const initialLat = document.getElementById('lat').value;
+        const initialLng = document.getElementById('lng').value;
+        setupBarcodeMap(initialLat, initialLng);
+      });
     </script>
   @endPushOnce
 </x-app-layout>

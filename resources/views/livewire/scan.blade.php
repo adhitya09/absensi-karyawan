@@ -10,25 +10,11 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
       integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script>
-      let currentMap = document.getElementById('currentMap');
-      let map = document.getElementById('map');
-
-      setTimeout(() => {
-        toggleMap();
-        toggleCurrentMap();
-      }, 1000);
-
-      function toggleCurrentMap() {
-        const mapIsVisible = currentMap.style.display === "none";
-        currentMap.style.display = mapIsVisible ? "block" : "none";
-        document.querySelector('#toggleCurrentMap').innerHTML = mapIsVisible ?
-          `<x-heroicon-s-chevron-up class="h-4 w-4" />` :
-          `<x-heroicon-s-chevron-down class="h-4 w-4" />`;
-      }
-
       function toggleMap() {
-        const mapIsVisible = map.style.display === "none";
-        map.style.display = mapIsVisible ? "block" : "none";
+        const mapEl = document.getElementById('map');
+        if (!mapEl) return;
+        const mapIsVisible = mapEl.style.display === "none";
+        mapEl.style.display = mapIsVisible ? "block" : "none";
       }
     </script>
   @endpushOnce
@@ -154,26 +140,17 @@
             </div>
           </div>
 
-          @if (!is_null($currentLiveCoords))
-            <button class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition" onclick="toggleCurrentMap()" id="toggleCurrentMap">
-              <span class="text-[10px]">Peta</span>
-              <x-heroicon-s-chevron-down class="h-3.5 w-3.5" />
-            </button>
-          @endif
+          <div id="gps-status-badge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+            <span>Mencari GPS...</span>
+          </div>
         </div>
 
-        @if (!is_null($currentLiveCoords))
-          <div class="text-xs text-slate-600 dark:text-slate-300 mb-2 truncate">
-            <a href="{{ \App\Helpers::getGoogleMapsUrl($currentLiveCoords[0], $currentLiveCoords[1]) }}" target="_blank"
-              class="underline hover:text-indigo-500 font-mono text-[11px] sm:text-xs">
-              {{ $currentLiveCoords[0] }}, {{ $currentLiveCoords[1] }}
-            </a>
-          </div>
-        @else
-          <div class="text-xs text-slate-400 mb-2">Mendeteksi koordinat GPS...</div>
-        @endif
+        <div id="gps-coords-text" class="text-xs text-slate-500 dark:text-slate-400 mb-2 truncate">
+          Mendeteksi koordinat GPS perangkat Anda...
+        </div>
 
-        <div class="h-48 sm:h-64 w-full rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700" id="currentMap" wire:ignore></div>
+        <div class="h-48 sm:h-64 w-full rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700 relative" id="currentMap" wire:ignore></div>
       </div>
 
       <!-- Quick Action Shortcuts -->
@@ -199,7 +176,7 @@
       </div>
 
       <!-- Attendance Point Map Toggle (if attended) -->
-      @if (!is_null($attendance?->lat_lng))
+      @if (!is_null($attendance?->latitude) && !is_null($attendance?->longitude))
         <div class="flex-card p-4 rounded-2xl bg-white dark:bg-[#161F30] border border-slate-100 dark:border-slate-800">
           <button class="w-full flex items-center justify-between text-left text-xs font-bold text-slate-700 dark:text-slate-300" onclick="toggleMap()" id="toggleMap">
             <span class="flex items-center gap-2">
@@ -221,30 +198,83 @@
 @script
   <script>
     const errorMsg = document.querySelector('#scanner-error');
-    getLocation();
+    window.currentLiveCoords = null;
+    let liveMap = null;
+    let liveMarker = null;
 
-    async function getLocation() {
-      if (navigator.geolocation) {
-        const map = L.map('currentMap');
+    function renderUserMap(lat, lng) {
+      const mapContainer = document.getElementById('currentMap');
+      if (!mapContainer) return;
+
+      if (!liveMap) {
+        liveMap = L.map('currentMap').setView([lat, lng], 16);
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          maxZoom: 21,
-        }).addTo(map);
-        navigator.geolocation.watchPosition((position) => {
-          console.log(position);
-          $wire.$set('currentLiveCoords', [position.coords.latitude, position.coords.longitude]);
-          map.setView([
-            Number(position.coords.latitude),
-            Number(position.coords.longitude),
-          ], 13);
-          L.marker([position.coords.latitude, position.coords.longitude]).addTo(map);
-        }, (err) => {
-          console.error(`ERROR(${err.code}): ${err.message}`);
-          alert('{{ __('Please enable your location') }}');
-        });
+          maxZoom: 19,
+          attribution: '&copy; OpenStreetMap'
+        }).addTo(liveMap);
+        liveMarker = L.marker([lat, lng]).addTo(liveMap).bindPopup("<b>Lokasi Anda Sekarang</b>").openPopup();
       } else {
-        document.querySelector('#scanner-error').innerHTML = "Gagal mendeteksi lokasi";
+        liveMarker.setLatLng([lat, lng]);
+        liveMap.setView([lat, lng], 16);
+      }
+
+      setTimeout(() => {
+        if (liveMap) liveMap.invalidateSize();
+      }, 200);
+    }
+
+    function handleGpsSuccess(position) {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      const accuracy = Math.round(position.coords.accuracy || 0);
+
+      window.currentLiveCoords = [lat, lng];
+
+      const badge = document.getElementById('gps-status-badge');
+      if (badge) {
+        badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400";
+        badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span><span>GPS Aktif (&plusmn;${accuracy}m)</span>`;
+      }
+
+      const textEl = document.getElementById('gps-coords-text');
+      if (textEl) {
+        textEl.innerHTML = `<span class="font-mono font-semibold text-emerald-600 dark:text-emerald-400 text-[11px] sm:text-xs">Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}</span> <a href="https://maps.google.com/?q=${lat},${lng}" target="_blank" class="ml-2 text-indigo-500 hover:underline text-[10px] inline-flex items-center gap-0.5">Google Maps &nearr;</a>`;
+      }
+
+      renderUserMap(lat, lng);
+      $wire.$set('currentLiveCoords', [lat, lng], false);
+    }
+
+    function handleGpsError(err) {
+      console.warn('Geolocation warning:', err);
+      if (!window.currentLiveCoords) {
+        const badge = document.getElementById('gps-status-badge');
+        if (badge) {
+          badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400";
+          badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span><span>GPS Belum Terbaca</span>`;
+        }
+
+        const textEl = document.getElementById('gps-coords-text');
+        if (textEl) {
+          textEl.innerHTML = `<span class="text-rose-500 text-xs font-medium">Izin lokasi belum aktif. Pastikan GPS HP aktif & izinkan lokasi pada browser.</span>`;
+        }
       }
     }
+
+    function initGeolocation() {
+      if (navigator.geolocation) {
+        const geoOptions = { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 };
+        navigator.geolocation.getCurrentPosition(handleGpsSuccess, handleGpsError, geoOptions);
+        navigator.geolocation.watchPosition(handleGpsSuccess, handleGpsError, geoOptions);
+      } else {
+        const badge = document.getElementById('gps-status-badge');
+        if (badge) {
+          badge.innerHTML = `<span class="text-rose-500 text-[10px]">GPS Tidak Didukung Browser</span>`;
+        }
+      }
+    }
+
+    initGeolocation();
 
     if (!$wire.isAbsence) {
       const scanner = new Html5Qrcode('scanner');
@@ -265,9 +295,8 @@
         if (scanner.getState() === Html5QrcodeScannerState.PAUSED) {
           return scanner.resume();
         }
-        await scanner.start({
-            facingMode: "environment"
-          },
+        await scanner.start(
+          { facingMode: "environment" },
           config,
           onScanSuccess,
         );
@@ -285,7 +314,20 @@
           return;
         }
 
-        const result = await $wire.scan(decodedText);
+        const lat = window.currentLiveCoords ? window.currentLiveCoords[0] : null;
+        const lng = window.currentLiveCoords ? window.currentLiveCoords[1] : null;
+
+        if (!lat || !lng) {
+          errorMsg.innerHTML = '<span class="text-rose-500 font-semibold">⚠️ Koordinat GPS belum terbaca. Mohon tunggu sinyal GPS atau aktifkan izin lokasi di browser HP.</span>';
+          setTimeout(async () => {
+            if (scanner.getState() === Html5QrcodeScannerState.PAUSED) {
+              scanner.resume();
+            }
+          }, 2000);
+          return;
+        }
+
+        const result = await $wire.scan(decodedText, lat, lng);
 
         if (result === true) {
           return onAttendanceSuccess();
@@ -295,7 +337,7 @@
 
         setTimeout(async () => {
           await startScanning();
-        }, 500);
+        }, 1500);
       }
 
       async function checkTime() {
@@ -380,17 +422,26 @@
         }
       });
 
-      const map = L.map('map').setView([
-        Number({{ $attendance?->latitude }}),
-        Number({{ $attendance?->longitude }}),
-      ], 13);
-      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 21,
-      }).addTo(map);
-      L.marker([
-        Number({{ $attendance?->latitude }}),
-        Number({{ $attendance?->longitude }}),
-      ]).addTo(map);
+      @if (!is_null($attendance?->latitude) && !is_null($attendance?->longitude))
+        try {
+          const mapEl = document.getElementById('map');
+          if (mapEl) {
+            const attMap = L.map('map').setView([
+              Number({{ $attendance->latitude }}),
+              Number({{ $attendance->longitude }}),
+            ], 15);
+            L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              maxZoom: 19,
+            }).addTo(attMap);
+            L.marker([
+              Number({{ $attendance->latitude }}),
+              Number({{ $attendance->longitude }}),
+            ]).addTo(attMap).bindPopup("Titik Absen Anda").openPopup();
+          }
+        } catch(e) {
+          console.warn("Attendance map warning:", e);
+        }
+      @endif
     }
   </script>
 @endscript
