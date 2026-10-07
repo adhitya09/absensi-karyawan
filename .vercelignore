@@ -1,0 +1,11 @@
+.git
+.github
+node_modules
+tests
+storage/*.key
+storage/logs/*
+storage/framework/cache/*
+storage/framework/sessions/*
+storage/framework/views/*
+run_online.bat
+scratch
