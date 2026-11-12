@@ -9,8 +9,9 @@
   <title>{{ config('app.name', 'Laravel') }}</title>
 
   <!-- Fonts -->
-  <link rel="preconnect" href="https://fonts.bunny.net">
-  <link href="https://fonts.bunny.net/css?family=figtree:400,500,600&display=swap" rel="stylesheet" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
 
   <!-- Scripts -->
   @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -19,8 +20,8 @@
   @livewireStyles
 </head>
 
-<body class="font-sans antialiased">
-  <div class="font-sans text-gray-900 dark:text-gray-100">
+<body class="font-sans antialiased bg-[#F4F6FC] dark:bg-[#0B0F19] text-slate-800 dark:text-slate-100">
+  <div class="font-sans">
 
     <div class="absolute right-4 top-4">
       <x-theme-toggle x-data />

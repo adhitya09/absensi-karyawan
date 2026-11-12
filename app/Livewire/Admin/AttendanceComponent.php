@@ -182,7 +182,12 @@ class AttendanceComponent extends Component
                 return $user;
             });
 
-        $data = ['employees' => $employees, 'dates' => $dates];
+        $data = [
+            'employees' => $employees,
+            'dates' => $dates,
+            'shifts' => \App\Models\Shift::all(),
+            'barcodes' => \App\Models\Barcode::all(),
+        ];
         session(['attendance_employees_fallback' => $data]);
 
         return view('livewire.admin.attendance', $data);

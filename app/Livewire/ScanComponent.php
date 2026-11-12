@@ -51,25 +51,33 @@ class ScanComponent extends Component
             }
         }
 
-        /** @var Attendance */
-        $existingAttendance = Attendance::where('user_id', Auth::user()->id)
-            ->where('date', date('Y-m-d'))
-            ->where('barcode_id', $barcode->id)
-            ->first();
+        /** @var Attendance|null */
+        $existingAttendance = Attendance::findActiveAttendance(Auth::id());
 
         if (!$existingAttendance) {
+            // Absen Masuk (Check-In)
             $attendance = $this->createAttendance($barcode);
-            $this->successMsg = __('Attendance In Successful');
+            $formattedTime = Carbon::now()->format('H:i');
+            $statusLabel = $attendance->status === 'late' ? ' (Terlambat)' : ' (Tepat Waktu)';
+            $this->successMsg = "Absen Masuk Berhasil pada pukul {$formattedTime}{$statusLabel}.";
+        } elseif (!is_null($existingAttendance->time_out)) {
+            // Already checked out! Prevent double scan / overwrite!
+            $formattedTime = Carbon::parse($existingAttendance->time_out)->format('H:i');
+            return "Anda sudah melakukan absen pulang pada pukul {$formattedTime}.";
         } else {
-            $attendance = $existingAttendance;
-            $attendance->update([
-                'time_out' => date('H:i:s'),
+            // Absen Pulang (Check-Out)
+            $now = Carbon::now();
+            $existingAttendance->update([
+                'time_out' => $now->format('H:i:s'),
             ]);
-            $this->successMsg = __('Attendance Out Successful');
+            $attendance = $existingAttendance->fresh();
+            $formattedTime = $now->format('H:i');
+            $diffText = $attendance->checkout_diff_formatted ? " ({$attendance->checkout_status_label}: {$attendance->checkout_diff_formatted})" : " ({$attendance->checkout_status_label})";
+            $this->successMsg = "Absen Pulang Berhasil pada pukul {$formattedTime}{$diffText}.";
         }
 
         if ($attendance) {
-            $this->setAttendance($attendance->fresh());
+            $this->setAttendance($attendance);
             Attendance::clearUserAttendanceCache(Auth::user(), Carbon::parse($attendance->date));
             return true;
         }
@@ -90,14 +98,16 @@ class ScanComponent extends Component
         $timeIn = $now->format('H:i:s');
         /** @var Shift */
         $shift = Shift::find($this->shift_id);
-        $status = Carbon::now()->setTimeFromTimeString($shift->start_time)->lt($now) ? 'late' : 'present';
+        $scheduledStart = $shift ? $shift->getScheduledStart($date) : $now;
+        // 0-minute tolerance: if time_in > scheduled start => late
+        $status = $now->gt($scheduledStart) ? 'late' : 'present';
         return Attendance::create([
             'user_id' => Auth::user()->id,
             'barcode_id' => $barcode->id,
             'date' => $date,
             'time_in' => $timeIn,
             'time_out' => null,
-            'shift_id' => $shift->id,
+            'shift_id' => $shift?->id,
             'latitude' => doubleval($this->currentLiveCoords[0]),
             'longitude' => doubleval($this->currentLiveCoords[1]),
             'status' => $status,
@@ -128,9 +138,8 @@ class ScanComponent extends Component
     {
         $this->shifts = Shift::all();
 
-        /** @var Attendance */
-        $attendance = Attendance::where('user_id', Auth::user()->id)
-            ->where('date', date('Y-m-d'))->first();
+        /** @var Attendance|null */
+        $attendance = Attendance::findActiveAttendance(Auth::id());
         if ($attendance) {
             $this->setAttendance($attendance);
         } else {
@@ -147,6 +156,12 @@ class ScanComponent extends Component
 
     public function render()
     {
-        return view('livewire.scan');
+        $selectedShift = Shift::find($this->shift_id);
+        $barcodes = Barcode::all();
+
+        return view('livewire.scan', [
+            'selectedShift' => $selectedShift,
+            'barcodes' => $barcodes,
+        ]);
     }
 }

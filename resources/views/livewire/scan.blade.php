@@ -63,6 +63,76 @@
           </div>
           <p class="text-[11px] text-slate-400 text-center mt-2 font-medium">Arahkan kamera ke QR Code yang disediakan kantor</p>
         </div>
+
+        <!-- Panel Aturan dan Ketentuan Absensi (Karyawan) -->
+        <div class="flex-card p-4 sm:p-5 bg-white dark:bg-[#161F30] rounded-2xl sm:rounded-3xl border border-slate-100/90 dark:border-slate-800/80 shadow-soft space-y-3">
+          <div class="flex items-center gap-2 pb-2.5 border-b border-slate-100 dark:border-slate-800">
+            <div class="w-7 h-7 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0">
+              <x-heroicon-o-information-circle class="w-4 h-4" />
+            </div>
+            <div>
+              <h4 class="text-xs font-bold text-slate-800 dark:text-white">Aturan & Ketentuan Absensi</h4>
+              <p class="text-[10px] text-slate-400">Parameter aktual shift & validasi lokasi GPS</p>
+            </div>
+          </div>
+
+          <!-- Parameter Shift Aktif -->
+          <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 space-y-1.5 text-xs">
+            <div class="flex items-center justify-between">
+              <span class="text-slate-500 dark:text-slate-400 text-[11px]">Shift Terpilih:</span>
+              <span class="font-bold text-slate-700 dark:text-slate-200 text-[11px]">{{ $selectedShift?->name ?? 'Belum dipilih' }}</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-slate-500 dark:text-slate-400 text-[11px]">Jam Kerja:</span>
+              <span class="font-mono font-semibold text-indigo-600 dark:text-indigo-400 text-[11px]">
+                {{ $selectedShift ? $selectedShift->start_time . ' - ' . $selectedShift->end_time : 'Belum ditentukan' }}
+                @if ($selectedShift?->isOvernight())
+                  <span class="text-[10px] text-purple-500 font-sans block text-right">(Shift Malam / Lewat Tengah Malam)</span>
+                @endif
+              </span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-slate-500 dark:text-slate-400 text-[11px]">Toleransi Telat:</span>
+              <span class="font-bold text-rose-500 text-[11px]">0 Menit</span>
+            </div>
+          </div>
+
+          <!-- Poin Aturan & Ketentuan -->
+          <div class="space-y-2 text-[11px] text-slate-600 dark:text-slate-300 leading-relaxed">
+            <div class="flex items-start gap-1.5">
+              <span class="text-indigo-500 font-bold shrink-0">•</span>
+              <div>
+                <strong>Alur Scan & Pencegahan Scan Ganda:</strong> Scan pertama mencatat <em>Absen Masuk</em>. Scan kedua mencatat <em>Absen Pulang</em>. Scan ulang setelah pulang ditolak agar catatan absensi tidak tertimpa ganda.
+              </div>
+            </div>
+            <div class="flex items-start gap-1.5">
+              <span class="text-indigo-500 font-bold shrink-0">•</span>
+              <div>
+                <strong>Radius Lokasi GPS:</strong> Browser wajib mengizinkan GPS akurasi tinggi. Presensi hanya berhasil dalam radius barcode kantor:
+                @if (isset($barcodes) && $barcodes->count())
+                  <span class="font-semibold text-slate-700 dark:text-slate-200">
+                    {{ $barcodes->map(fn($b) => $b->name . ' (' . ($b->radius > 0 ? $b->radius . 'm' : 'bebas radius') . ')')->implode(', ') }}.
+                  </span>
+                @else
+                  <span class="text-slate-400">Belum ditentukan.</span>
+                @endif
+                Scan di luar jangkauan radius akan ditolak otomatis.
+              </div>
+            </div>
+            <div class="flex items-start gap-1.5">
+              <span class="text-indigo-500 font-bold shrink-0">•</span>
+              <div>
+                <strong>Keterangan Status Pulang:</strong>
+                <ul class="mt-1 space-y-1 pl-1 text-[10px] text-slate-500 dark:text-slate-400">
+                  <li><span class="text-emerald-600 font-semibold">Pulang Sesuai Jadwal:</span> Checkout tepat pada jadwal selesai shift.</li>
+                  <li><span class="text-amber-600 font-semibold">Pulang Lebih Awal:</span> Checkout sebelum jam selesai shift (selisih menit tercatat).</li>
+                  <li><span class="text-purple-600 font-semibold">Melewati Jam Shift:</span> Checkout setelah shift berakhir. <em>(Indikasi lembur, bukan persetujuan lembur otomatis/dibayar)</em>.</li>
+                  <li><span class="text-rose-500 font-semibold">Tidak Absen Pulang:</span> Shift telah usai namun tidak melakukan scan pulang.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     @endif
 
@@ -105,7 +175,14 @@
         </div>
 
         <!-- Keluar Card -->
-        <div class="flex-card p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border bg-indigo-50/70 border-indigo-200/80 dark:bg-indigo-950/30 dark:border-indigo-900/60 shadow-soft">
+        @php
+          $hasTimeOut = !empty($attendance?->time_out);
+          $checkoutStatus = $attendance?->checkout_status;
+          $checkoutLabel = $attendance?->checkout_status_label;
+          $checkoutBadgeClass = $attendance?->checkout_badge_class;
+          $checkoutDiffFormatted = $attendance?->checkout_diff_formatted;
+        @endphp
+        <div class="flex-card p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border {{ $hasTimeOut ? 'bg-indigo-50/70 border-indigo-200/80 dark:bg-indigo-950/30 dark:border-indigo-900/60' : 'bg-slate-50/70 border-slate-200/80 dark:bg-slate-900/30 dark:border-slate-800/60' }} shadow-soft">
           <div class="flex items-center justify-between mb-2">
             <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">
               Absen Keluar
@@ -117,13 +194,27 @@
           <div class="text-lg sm:text-2xl font-black text-slate-800 dark:text-white">
             @if ($isAbsence)
               {{ __($attendance?->status) ?? '-' }}
+            @elseif ($hasTimeOut)
+              {{ Carbon::parse($attendance->time_out)->format('H:i:s') }}
+            @elseif ($attendance?->time_in)
+              <span class="text-xs sm:text-sm font-semibold text-amber-600 dark:text-amber-400">Belum Pulang</span>
             @else
-              {{ $attendance?->time_out ? Carbon::parse($attendance?->time_out)->format('H:i:s') : 'Belum Absen' }}
+              <span class="text-xs sm:text-sm font-semibold text-slate-400">Belum Absen</span>
             @endif
           </div>
-          <span class="inline-block mt-1 text-[10px] sm:text-xs font-semibold text-slate-400">
-            Selesai Kerja
-          </span>
+          @if ($hasTimeOut && $checkoutLabel)
+            <span class="inline-block mt-1 text-[10px] sm:text-xs font-semibold px-2 py-0.5 rounded-full {{ $checkoutBadgeClass }}">
+              {{ $checkoutLabel }} {{ $checkoutDiffFormatted ? "({$checkoutDiffFormatted})" : '' }}
+            </span>
+          @elseif ($attendance?->time_in && !$hasTimeOut)
+            <span class="inline-block mt-1 text-[10px] sm:text-xs font-semibold text-slate-400">
+              Sedang Bertugas
+            </span>
+          @else
+            <span class="inline-block mt-1 text-[10px] sm:text-xs font-semibold text-slate-400">
+              Selesai Kerja
+            </span>
+          @endif
         </div>
       </div>
 

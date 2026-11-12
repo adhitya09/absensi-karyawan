@@ -47,12 +47,32 @@
         @endif
         @if ($currentAttendance['time_in'] || $currentAttendance['time_out'])
           <div class="grid grid-cols-2 gap-3">
-            <x-label for="time_in" value="Waktu Masuk"></x-label>
-            <x-label for="time_out" value="Waktu Keluar"></x-label>
-            <x-input type="text" id="time_in" disabled
-              value="{{ $currentAttendance['time_in'] ?? '-' }}"></x-input>
-            <x-input type="text" id="time_out" disabled
-              value="{{ $currentAttendance['time_out'] ?? '-' }}"></x-input>
+            <div>
+              <x-label for="time_in" value="Waktu Masuk"></x-label>
+              <x-input type="text" id="time_in" class="w-full mt-1" disabled
+                value="{{ $currentAttendance['time_in'] ?? '-' }}"></x-input>
+            </div>
+            <div>
+              <x-label for="time_out" value="Waktu Keluar"></x-label>
+              <x-input type="text" id="time_out" class="w-full mt-1" disabled
+                value="{{ $currentAttendance['time_out'] ?? '-' }}"></x-input>
+            </div>
+          </div>
+        @endif
+
+        @if (!empty($currentAttendance['checkout_status_label']))
+          <div class="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 space-y-1.5 text-xs">
+            <div class="flex items-center justify-between">
+              <span class="text-slate-500 font-medium">Status Kepulangan:</span>
+              <span class="font-bold px-2.5 py-0.5 rounded-full {{ $currentAttendance['checkout_badge_class'] ?? 'bg-slate-100 text-slate-600' }}">
+                {{ $currentAttendance['checkout_status_label'] }} {{ $currentAttendance['checkout_diff_formatted'] ? '(' . $currentAttendance['checkout_diff_formatted'] . ')' : '' }}
+              </span>
+            </div>
+            @if (!empty($currentAttendance['checkout_note']))
+              <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-relaxed">
+                {{ $currentAttendance['checkout_note'] }}
+              </p>
+            @endif
           </div>
         @endif
 

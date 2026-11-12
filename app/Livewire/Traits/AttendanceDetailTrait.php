@@ -28,6 +28,11 @@ trait AttendanceDetailTrait
             if ($attendance->shift_id) {
                 $this->currentAttendance['shift'] = $attendance->shift;
             }
+            $this->currentAttendance['checkout_status'] = $attendance->checkout_status;
+            $this->currentAttendance['checkout_status_label'] = $attendance->checkout_status_label;
+            $this->currentAttendance['checkout_diff_formatted'] = $attendance->checkout_diff_formatted;
+            $this->currentAttendance['checkout_badge_class'] = $attendance->checkout_badge_class;
+            $this->currentAttendance['checkout_note'] = $attendance->checkout_note;
         }
     }
 }

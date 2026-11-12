@@ -10,11 +10,23 @@
   $dashOffset = $circumference - ($circumference * (min(100, max(0, $attendanceRate)) / 100));
 @endphp
 
-<div class="space-y-6">
+<div class="space-y-6" wire:poll.15s>
   @pushOnce('styles')
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   @endpushOnce
+
+  <!-- Header Live Indicator -->
+  <div class="flex items-center justify-between pb-1">
+    <div>
+      <h2 class="text-lg sm:text-xl font-extrabold text-slate-800 dark:text-white">Dashboard Presensi</h2>
+      <p class="text-xs text-slate-400">Monitoring kehadiran & kepulangan karyawan harian</p>
+    </div>
+    <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/40">
+      <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+      <span>Pembaruan Live (15s)</span>
+    </div>
+  </div>
 
   <!-- 1. TOP STAT CARDS (Responsive 2x2 on Mobile, 4 Cols on Desktop) -->
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
@@ -79,26 +91,55 @@
       </div>
     </div>
 
-    <!-- Card 4: Izin, Sakit & Alpa -->
+    <!-- Card 4: Izin, Sakit & Evaluasi Belum Hadir / Alpa -->
     <div class="flex-card p-3.5 sm:p-5 bg-white dark:bg-[#161F30] rounded-2xl sm:rounded-3xl border border-slate-100/90 dark:border-slate-800/80 shadow-soft hover:shadow-soft-lg transition-all duration-200">
       <div class="flex items-center justify-between mb-2.5 sm:mb-3">
         <div class="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-purple-50 dark:bg-purple-950/60 flex items-center justify-center text-purple-600 dark:text-purple-400 shrink-0">
           <x-heroicon-o-document-text class="w-4 h-4 sm:w-6 sm:h-6" />
         </div>
         <span class="inline-flex items-center gap-0.5 sm:gap-1 text-[10px] sm:text-xs font-semibold text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/60 px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-full truncate max-w-[80px] sm:max-w-none">
-          {{ $excusedCount + $sickCount }} Izin
+          {{ $excusedCount + $sickCount }} Izin/Skt
         </span>
       </div>
       <div>
         <span class="text-[10px] sm:text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-0.5 sm:mb-1 truncate">
-          Belum Hadir
+          {{ $allShiftsEnded ? 'Tidak Hadir (Alpa)' : 'Belum Hadir' }}
         </span>
         <div class="text-xl sm:text-3xl font-extrabold tracking-tight text-slate-800 dark:text-white">
-          {{ $absentCount }}<span class="text-xs sm:text-base font-normal text-slate-400 ml-1">org</span>
+          {{ $allShiftsEnded ? $absentCount : $notYetAttendedCount }}<span class="text-xs sm:text-base font-normal text-slate-400 ml-1">org</span>
         </div>
       </div>
     </div>
 
+  </div>
+
+  <!-- Quick Summary: Rangkuman Status Kepulangan -->
+  <div class="p-3 sm:p-4 rounded-2xl sm:rounded-3xl bg-white dark:bg-[#161F30] border border-slate-100/90 dark:border-slate-800/80 shadow-soft">
+    <div class="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-2">
+      Status Kepulangan Karyawan Hari Ini
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2 sm:gap-3 text-xs">
+      <div class="p-2.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/40">
+        <span class="block text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">Sesuai Jadwal</span>
+        <span class="text-base font-extrabold text-emerald-700 dark:text-emerald-300">{{ $onTimeCheckoutCount }} org</span>
+      </div>
+      <div class="p-2.5 rounded-xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/40">
+        <span class="block text-[10px] text-amber-600 dark:text-amber-400 font-semibold">Pulang Lebih Awal</span>
+        <span class="text-base font-extrabold text-amber-700 dark:text-amber-300">{{ $earlyLeaveCount }} org</span>
+      </div>
+      <div class="p-2.5 rounded-xl bg-purple-50/70 dark:bg-purple-950/30 border border-purple-100 dark:border-purple-900/40">
+        <span class="block text-[10px] text-purple-600 dark:text-purple-400 font-semibold">Melewati Jam Shift</span>
+        <span class="text-base font-extrabold text-purple-700 dark:text-purple-300">{{ $overtimeIndicationCount }} org</span>
+      </div>
+      <div class="p-2.5 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40">
+        <span class="block text-[10px] text-blue-600 dark:text-blue-400 font-semibold">Belum Absen Pulang</span>
+        <span class="text-base font-extrabold text-blue-700 dark:text-blue-300">{{ $inProgressCount }} org</span>
+      </div>
+      <div class="p-2.5 rounded-xl bg-rose-50/70 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-900/40">
+        <span class="block text-[10px] text-rose-600 dark:text-rose-400 font-semibold">Tidak Absen Pulang</span>
+        <span class="text-base font-extrabold text-rose-700 dark:text-rose-300">{{ $noCheckoutCount }} org</span>
+      </div>
+    </div>
   </div>
 
   <!-- 2. MIDDLE SECTION (Matches 2-Column Layout in Reference Screenshot) -->
@@ -373,8 +414,16 @@
                       $statusLabel = 'Alpa';
                       break;
                   default:
-                      $badgeClass = 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400';
-                      $statusLabel = '-';
+                      if ($isWeekend) {
+                          $badgeClass = 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400';
+                          $statusLabel = '-';
+                      } elseif ($allShiftsEnded) {
+                          $badgeClass = 'bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400 border border-rose-200/60 dark:border-rose-800/40';
+                          $statusLabel = 'Alpa';
+                      } else {
+                          $badgeClass = 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/60';
+                          $statusLabel = 'Belum Hadir';
+                      }
                       break;
               }
             @endphp
@@ -423,9 +472,22 @@
                 {{ $timeIn ?? '-' }}
               </td>
 
-              <!-- Time Out -->
+              <!-- Time Out & Status Pulang -->
               <td class="px-4 py-4 text-slate-600 dark:text-slate-300 font-mono text-xs">
-                {{ $timeOut ?? '-' }}
+                @if ($timeOut)
+                  <div class="font-semibold">{{ $timeOut }}</div>
+                  @if ($attendance?->checkout_status_label)
+                    <span class="inline-block mt-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-full {{ $attendance->checkout_badge_class }}">
+                      {{ $attendance->checkout_status_label }} {{ $attendance->checkout_diff_formatted ? "({$attendance->checkout_diff_formatted})" : '' }}
+                    </span>
+                  @endif
+                @elseif ($attendance?->time_in)
+                  <span class="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full {{ $attendance?->checkout_badge_class ?? 'bg-slate-100 text-slate-500' }}">
+                    {{ $attendance?->checkout_status_label ?? 'Belum Pulang' }}
+                  </span>
+                @else
+                  <span class="text-slate-400 font-sans">-</span>
+                @endif
               </td>
 
               <!-- Action Detail Button -->
